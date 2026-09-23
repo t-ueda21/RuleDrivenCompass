@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "rule-driven-compass",
+  "description": "Shared Compass workflow and project setup for Claude Code and Codex.",
+  "owner": {
+    "name": "Eirene-Bel",
+    "url": "https://github.com/Eirene-Bel"
+  },
+  "plugins": [
+    {
+      "name": "compass",
+      "source": "./plugins/compass",
+      "description": "Classify development work, select relevant Compass rules, and verify changes.",
+      "version": "0.1.0",
+      "category": "development",
+      "tags": ["workflow", "development", "skills"],
+      "strict": true
+    }
+  ]
+}

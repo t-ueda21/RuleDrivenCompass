@@ -1,0 +1,17 @@
+{
+  "name": "rule-driven-compass",
+  "plugins": [
+    {
+      "name": "compass",
+      "source": {
+        "source": "local",
+        "path": "./plugins/compass"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
