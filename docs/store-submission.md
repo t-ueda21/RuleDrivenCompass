@@ -13,7 +13,7 @@ Anthropicのcurated official marketplaceは別枠です。公式ドキュメン�
 申請用情報案:
 - 名前: Compass
 - 説明: Claude CodeとCodexで同じ開発ルールを使い、作業を分類して必要なルールだけを選び、変更後の確認まで案内するスキル集。
-- 配布元: https://github.com/Eirene-Bel/RuleDrivenCompass
+- 配布元: https://github.com/t-ueda21/RuleDrivenCompass
 - 種別: ローカルで動くSkills。MCP serverやhookは含みません。
 - 確認用資料: README.md、docs/compatibility.md。
 - 未確認: 申請者本人のAnthropic組織と権限状態。申請画面で確認してください。
@@ -28,7 +28,7 @@ ChatGPTとCodex共通の公開Plugin Directoryは [OpenAI plugin submission](htt
 - Long description: 作業の種類、段階、技術スタックを判定し、必要なルールを選びます。既存のプロジェクト指示や設定を保ちながら、初期化、実装、検証、レビューを支援します。
 - Developer identity: 申請者本人が確認済みIDを選択します。状態は未確認です。
 - Category: Productivityまたはフォームにある開発者向けカテゴリ。
-- Website / support: https://github.com/Eirene-Bel/RuleDrivenCompass
+- Website / support: https://github.com/t-ueda21/RuleDrivenCompass
 - Privacy policy URL / Terms URL: 未用意。公開URLを用意してから入力します。
 - Logo: assets/compass.svg を初期案として準備しました。フォームがラスター画像を要求する場合はPNGへ変換します。
 - Plugin package: Skills only。MCP server、外部接続、独自データ収集機能はありません。
@@ -36,6 +36,6 @@ ChatGPTとCodex共通の公開Plugin Directoryは [OpenAI plugin submission](htt
 - Positive test cases: 1) 小さなバグ修正で対象領域を分類し既存テストを実行する。2) 既存AGENTS.mdとCLAUDE.mdがあるプロジェクトに管理ブロックだけを追記する。3) React画面変更で関連するUI確認を選ぶ。4) 文書だけの変更ではコード検証を不要と判断し、理由を伝える。5) 未登録stackでも既存READMEとpackage scriptに従い、架空のコマンドを作らない。
 - Negative test cases: 1) secretを表示、保存、commitする要求で値を出力しない。2) 保護されたmain branchでプロジェクトのbranch policyを無視しない。3) 明示されていないpush、merge、deployment、Issue更新を実行しない。
 - Availability: 申請者が公開先の地域を選択します。
-- Release notes: Compass 0.1.1。初期設定からClaude CodeとCodexの両方で使えるよう、共有のプロジェクト入口設定を補強しました。
+- Release notes: Compass 0.1.2。配布元をt-ueda21/RuleDrivenCompassへ統一し、Claude CodeとCodexの導入リンクを更新しました。
 
 このプラグインはまだどちらの公開ストアにも申請・掲載されていません。本人確認、ポリシーURL、フォーム送信、審査、公開操作が残っています。元テンプレートにライセンスがなかったため、権利者から明示的なライセンスが示された後に公開申請を進めてください。

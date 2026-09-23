@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Update repository ownership metadata and installation links for t-ueda21 distribution.
+
 ## 0.1.1
 
 - Ensure a single project setup initializes entry points for both Claude Code and Codex.

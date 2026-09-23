@@ -30,7 +30,7 @@ CompassはSkillsと文書だけのプラグインです。MCP接続、実行hook
 Claude Codeの入力欄で、マーケットプレイスを追加し、Compassを自分用にインストールします。
 
 ~~~text
-/plugin marketplace add Eirene-Bel/RuleDrivenCompass
+/plugin marketplace add t-ueda21/RuleDrivenCompass
 /plugin install compass@rule-driven-compass
 ~~~
 
@@ -45,7 +45,7 @@ Claude Codeのサインインは通常どおり必要です。
 ## Codexへインストール
 
 ~~~powershell
-codex plugin marketplace add Eirene-Bel/RuleDrivenCompass
+codex plugin marketplace add t-ueda21/RuleDrivenCompass
 codex plugin add compass@rule-driven-compass
 ~~~
 

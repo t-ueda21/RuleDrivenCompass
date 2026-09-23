@@ -1,8 +1,8 @@
 {
   "name": "compass",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Shared Compass workflow and project setup for Claude Code and Codex.",
   "author": {
-    "name": "Eirene-Bel"
+    "name": "t-ueda21"
   }
 }

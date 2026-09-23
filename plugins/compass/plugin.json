@@ -1,14 +1,14 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "compass",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Shared Compass workflow and project setup for Claude Code and Codex.",
   "author": {
-    "name": "Eirene-Bel",
-    "url": "https://github.com/Eirene-Bel"
+    "name": "t-ueda21",
+    "url": "https://github.com/t-ueda21"
   },
-  "homepage": "https://github.com/Eirene-Bel/RuleDrivenCompass",
-  "repository": "https://github.com/Eirene-Bel/RuleDrivenCompass",
+  "homepage": "https://github.com/t-ueda21/RuleDrivenCompass",
+  "repository": "https://github.com/t-ueda21/RuleDrivenCompass",
   "keywords": [
     "workflow",
     "development",
