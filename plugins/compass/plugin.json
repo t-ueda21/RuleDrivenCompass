@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "compass",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared Compass workflow and project setup for Claude Code and Codex.",
   "author": {
     "name": "Eirene-Bel",
@@ -9,5 +9,9 @@
   },
   "homepage": "https://github.com/Eirene-Bel/RuleDrivenCompass",
   "repository": "https://github.com/Eirene-Bel/RuleDrivenCompass",
-  "keywords": ["workflow", "development", "project-setup"]
+  "keywords": [
+    "workflow",
+    "development",
+    "project-setup"
+  ]
 }

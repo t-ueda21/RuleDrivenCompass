@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Ensure a single project setup initializes entry points for both Claude Code and Codex.
+
 ## 0.1.0
 
 - Publish one shared workflow skill package for Claude Code and Codex.

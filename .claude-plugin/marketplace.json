@@ -11,9 +11,13 @@
       "name": "compass",
       "source": "./plugins/compass",
       "description": "Classify development work, select relevant Compass rules, and verify changes.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "category": "development",
-      "tags": ["workflow", "development", "skills"],
+      "tags": [
+        "workflow",
+        "development",
+        "skills"
+      ],
       "strict": true
     }
   ]

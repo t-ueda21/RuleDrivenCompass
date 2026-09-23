@@ -36,6 +36,6 @@ ChatGPTとCodex共通の公開Plugin Directoryは [OpenAI plugin submission](htt
 - Positive test cases: 1) 小さなバグ修正で対象領域を分類し既存テストを実行する。2) 既存AGENTS.mdとCLAUDE.mdがあるプロジェクトに管理ブロックだけを追記する。3) React画面変更で関連するUI確認を選ぶ。4) 文書だけの変更ではコード検証を不要と判断し、理由を伝える。5) 未登録stackでも既存READMEとpackage scriptに従い、架空のコマンドを作らない。
 - Negative test cases: 1) secretを表示、保存、commitする要求で値を出力しない。2) 保護されたmain branchでプロジェクトのbranch policyを無視しない。3) 明示されていないpush、merge、deployment、Issue更新を実行しない。
 - Availability: 申請者が公開先の地域を選択します。
-- Release notes: 既存Compassの選択式ルールとライフサイクルを、Claude Code / Codex共通のskill packageとGitHub marketplaceで配布する初回版です。
+- Release notes: Compass 0.1.1。初期設定からClaude CodeとCodexの両方で使えるよう、共有のプロジェクト入口設定を補強しました。
 
 このプラグインはまだどちらの公開ストアにも申請・掲載されていません。本人確認、ポリシーURL、フォーム送信、審査、公開操作が残っています。元テンプレートにライセンスがなかったため、権利者から明示的なライセンスが示された後に公開申請を進めてください。
