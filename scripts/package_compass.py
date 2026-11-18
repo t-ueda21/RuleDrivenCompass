@@ -76,14 +76,20 @@ def sync_payload(files: dict[str, bytes], *, check: bool) -> None:
         if path.is_file():
             bundled[path.relative_to(PAYLOAD).as_posix()] = file_bytes(path)
     differences = sorted(name for name in files.keys() | bundled.keys() if files.get(name) != bundled.get(name))
-    if check and differences:
+    if not differences:
+        return
+    if check:
         raise ValueError("配布元と同梱ファイルに差分がある。\n" + "\n".join(differences))
+    for name in bundled.keys() - files.keys():
+        (PAYLOAD / name).unlink()
+    # A new file may take the place of a directory from the previous release.
+    directories = sorted((p for p in PAYLOAD.rglob("*") if p.is_dir()), key=lambda p: len(p.parts), reverse=True)
+    for directory in directories:
+        if not any(directory.iterdir()):
+            directory.rmdir()
     for name in differences:
-        path = PAYLOAD / name
         if name in files:
-            write_file(path, files[name])
-        else:
-            path.unlink()
+            write_file(PAYLOAD / name, files[name])
 
 
 def write_zip(path: Path, files: dict[str, bytes]) -> None:

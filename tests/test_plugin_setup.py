@@ -91,12 +91,21 @@ class PluginSetupTests(unittest.TestCase):
         payload = self.project / "plugins/compass/skills/compass-setup/assets/compass"
         self.assertEqual(set(common_files(payload)), expected)
         retired = Path("guide/new-tool/example.bin")
-        (self.project / ".compass" / retired).unlink()
+        source = self.project / ".compass"
+        (source / retired).unlink()
+        (source / retired.parent).rmdir()
+        (source / retired.parent).write_bytes(b"replacement")
         check = subprocess.run([sys.executable, str(build), "--check"], cwd=self.project, capture_output=True)
         self.assertEqual(check.returncode, 1)
         self.assertTrue((payload / retired).exists())
         subprocess.run([sys.executable, str(build)], cwd=self.project, check=True, capture_output=True)
         self.assertFalse((payload / retired).exists())
+        self.assertEqual((payload / retired.parent).read_bytes(), b"replacement")
+        (source / retired.parent).unlink()
+        (source / retired.parent).mkdir()
+        (source / retired).write_bytes(b"restored")
+        subprocess.run([sys.executable, str(build)], cwd=self.project, check=True, capture_output=True)
+        self.assertEqual((payload / retired).read_bytes(), b"restored")
 
 
 if __name__ == "__main__":
