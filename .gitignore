@@ -1,0 +1,6 @@
+/.compass/records/*
+!/.compass/records/README.md
+/dist/
+/plugins/compass/skills/compass-setup/assets/compass.zip
+__pycache__/
+*.py[cod]

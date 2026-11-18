@@ -7,6 +7,7 @@
 import argparse
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from markdown_it import MarkdownIt
@@ -17,15 +18,26 @@ PHASE_DIR = Path(__file__).resolve().parents[2] / "workflow" / "phase"
 MARKDOWN = MarkdownIt("commonmark").enable("table")
 MODE_LABELS = {"本番必須": "production", "試作必須": "poc"}
 SECTION_LABEL = re.compile(r"（(必須|本番必須|試作必須|補足)）$")
-STATUS_LABELS = ("該当なし", "対象外", "未確認", "未確定", "未実施", "判定不能")
+STATUS_LABELS = (
+    "該当なし", "対象外", "未確認", "未確定", "未実施", "判定不能", "要確認", "確認待ち",
+    "保留", "未検証", "未判定",
+)
 STATUS = re.compile(r"(" + "|".join(STATUS_LABELS) + r")[（(](.*)[）)]", re.DOTALL)
 REQUIREMENT_SECTION = "要件との対応（必須）"
 CONTRACT_SECTION = "要素間の契約（補足）"
 CONTRACT_COLUMN = "契約 ID・項目名（該当時）"
 PLACEHOLDERS = {
     "", "-", "—", "―", "…", "...", "tbd", "n/a", "todo",
-    "記入", "［記入］", "未記入", "未定", "理由", "理由を記載",
+    "記入", "［記入］", "仮記入", "未記入", "未定", "理由", "理由を記載",
 }
+
+
+@dataclass
+class DocumentInspection:
+    sections: dict[str, list[SyntaxTreeNode]]
+    section_count: int
+    messages: list[str]
+    blocking: list[str]
 
 
 def node_text(node: SyntaxTreeNode) -> str:
@@ -65,6 +77,7 @@ def recorded_status(value: str) -> str | None:
 
 
 def cell_error(value: str, required: bool) -> str | None:
+    value = value.strip("`").strip()
     if value.casefold() in PLACEHOLDERS:
         return "空欄または仮記入"
     status = recorded_status(value)
@@ -89,7 +102,11 @@ def recorded_rows(
 
 
 def check_table(
-    template: list[list[str]], rows: list[list[str]], required: bool
+    template: list[list[str]],
+    rows: list[list[str]],
+    required: bool,
+    *,
+    required_only: bool = False,
 ) -> list[str]:
     headers = template[0]
     fixed_labels = [row[0] for row in template[1:] if row[0]]
@@ -101,7 +118,10 @@ def check_table(
     errors = []
     if fixed_labels:
         labels = [row[0] for row in data if any(row)]
-        errors.extend(f"記録項目がない。{label}" for label in fixed_labels if label not in labels)
+        errors.extend(
+            f"記録項目がない。{label}" for label in fixed_labels
+            if label not in labels and not (required_only and label.endswith("（該当時）"))
+        )
         if len(labels) != len(set(labels)):
             errors.append("記録項目の行が重複している")
     if not any(any(row) for row in data):
@@ -117,6 +137,8 @@ def check_table(
             conditional = header.endswith("（該当時）")
             if fixed_labels and index > 0:
                 conditional = conditional or label.endswith("（該当時）")
+            if required_only and conditional:
+                continue
             if header == "状況" and value in STATUS_LABELS and reason_column is not None:
                 value = f"{value}（{row[reason_column]}）"
             error = cell_error(value, required and not conditional)
@@ -126,7 +148,12 @@ def check_table(
 
 
 def check_section(
-    expected: list[list[str]], nodes: list[SyntaxTreeNode], label: str, mode: str | None
+    expected: list[list[str]],
+    nodes: list[SyntaxTreeNode],
+    label: str,
+    mode: str | None,
+    *,
+    required_only: bool = False,
 ) -> list[str]:
     tables = [table_rows(node) for node in nodes if node.type == "table"]
     fixed = {row[0] for row in expected[1:] if row[0]}
@@ -152,7 +179,7 @@ def check_section(
         return []
     if not has_data or len(tables) != 1:
         return ["記録欄を記入する" if required else "記録欄または適用結果と理由を記入する"]
-    return check_table(expected, tables[0], required)
+    return check_table(expected, tables[0], required, required_only=required_only)
 
 
 def check_basic_design_contracts(sections: dict[str, list[SyntaxTreeNode]]) -> list[str]:
@@ -199,44 +226,67 @@ def check_basic_design_contracts(sections: dict[str, list[SyntaxTreeNode]]) -> l
     return errors
 
 
-def main() -> int:
-    templates = {
+def document_templates() -> dict[str, Path]:
+    return {
         path.parent.parent.name: path for path in PHASE_DIR.glob("*/references/template.md")
     }
+
+
+def inspect_document(phase: str, document: Path, mode: str | None) -> DocumentInspection:
+    expected = read_sections(PHASE_DIR / phase / "references" / "template.md")
+    actual = read_sections(document)
+    if not expected:
+        raise ValueError("テンプレートの工程見出しがない")
+    messages = []
+    blocking = []
+    for title, nodes in expected.items():
+        label = SECTION_LABEL.search(title)
+        tables = [node for node in nodes if node.type == "table"]
+        if label is None or len(tables) != 1:
+            raise ValueError(f"テンプレートの記録区分または表を確認する。{title}")
+        category = label[1]
+        expected_mode = MODE_LABELS.get(category)
+        if expected_mode and mode is None:
+            raise ValueError("本番・試作の切り替えがある工程には --mode を指定する")
+        required = category != "補足" and (expected_mode is None or mode == expected_mode)
+        if title not in actual:
+            message = f"{title} — 見出しと記録がない"
+            messages.append(message)
+            if required:
+                blocking.append(message)
+            continue
+        rows = table_rows(tables[0])
+        errors = check_section(rows, actual[title], category, mode)
+        messages.extend(f"{title} — {error}" for error in errors)
+        if required:
+            blocking.extend(
+                f"{title} — {error}"
+                for error in check_section(rows, actual[title], category, mode, required_only=True)
+            )
+    if phase == "basic-design":
+        errors = check_basic_design_contracts(actual)
+        messages.extend(errors)
+        blocking.extend(errors)
+    return DocumentInspection(actual, len(expected), messages, blocking)
+
+
+def main() -> int:
     parser = argparse.ArgumentParser(description="RDCの標準テンプレートで作成した工程文書の記入状況を確認する。")
-    parser.add_argument("phase", choices=sorted(templates))
+    parser.add_argument("phase", choices=sorted(document_templates()))
     parser.add_argument("document", type=Path)
     parser.add_argument("--mode", choices=("production", "poc"))
     args = parser.parse_args()
     try:
-        expected = read_sections(templates[args.phase])
-        actual = read_sections(args.document)
-        if not expected:
-            raise ValueError("テンプレートの工程見出しがない")
-        messages = []
-        for title, nodes in expected.items():
-            label = SECTION_LABEL.search(title)
-            tables = [node for node in nodes if node.type == "table"]
-            if label is None or len(tables) != 1:
-                raise ValueError(f"テンプレートの記録区分または表を確認する。{title}")
-            if label[1] in MODE_LABELS and args.mode is None:
-                parser.error("本番・試作の切り替えがある工程には --mode を指定する")
-            if title not in actual:
-                messages.append(f"{title} — 見出しと記録がない")
-                continue
-            errors = check_section(table_rows(tables[0]), actual[title], label[1], args.mode)
-            messages.extend(f"{title} — {error}" for error in errors)
-        if args.phase == "basic-design":
-            messages.extend(check_basic_design_contracts(actual))
+        inspection = inspect_document(args.phase, args.document, args.mode)
     except (OSError, ValueError) as error:
         parser.error(str(error))
 
-    if messages:
-        print(f"{args.document} — 記入状況の要確認 {len(messages)} 件", file=sys.stderr)
-        for message in messages:
+    if inspection.messages:
+        print(f"{args.document} — 記入状況の要確認 {len(inspection.messages)} 件", file=sys.stderr)
+        for message in inspection.messages:
             print(f"- {message}", file=sys.stderr)
         return 1
-    print(f"{args.document} — 必須欄と補足欄の記入を確認（{len(expected)}項目）")
+    print(f"{args.document} — 必須欄と補足欄の記入を確認（{inspection.section_count}項目）")
     return 0
 
 

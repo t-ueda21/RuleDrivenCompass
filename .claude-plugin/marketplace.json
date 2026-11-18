@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "rule-driven-compass",
+  "description": "開発プロジェクトにRule Driven Compassを導入するためのマーケットプレイス。",
+  "owner": {
+    "name": "t-ueda21"
+  },
+  "plugins": [
+    {
+      "name": "compass",
+      "source": "./plugins/compass",
+      "description": "プロジェクトにRDCの工程Skill、技術ガイド、テンプレート、検証・Excel出力を導入する。"
+    }
+  ]
+}

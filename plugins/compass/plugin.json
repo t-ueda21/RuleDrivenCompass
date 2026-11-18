@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "compass",
+  "version": "0.2.1",
+  "description": "プロジェクトにRDCの工程Skill、技術ガイド、テンプレート、検証・Excel出力を導入する。",
+  "author": {
+    "name": "t-ueda21"
+  },
+  "repository": "https://github.com/t-ueda21/RuleDrivenCompass",
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/compass-setup/SKILL.md",
+      "interface": {
+        "displayName": "Rule Driven Compass",
+        "shortDescription": "開発工程のSkillとテンプレートを導入",
+        "category": "Productivity"
+      }
+    }
+  }
+}

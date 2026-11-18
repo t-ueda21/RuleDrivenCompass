@@ -8,8 +8,8 @@
 | 作業・検証 | [ワークフロー](workflow/README.md)、[工程 Skill と成果物テンプレート](workflow/phase/README.md)、[技術ガイド](guide/README.md) |
 | 全工程で人間に確認するとき、回答を受けたとき、決定を反映したとき | [課題管理 Skill](workflow/issue-tracking/SKILL.md) |
 | 結果報告 | [作業後 Skill](workflow/postflight/SKILL.md) |
-| 文書の記録・確認・Excel出力 | [共通の文書手順](documents/README.md) |
-| 課題台帳 | [課題管理表](records/issue-log.md) |
+| 工程判定・文書の記録・確認・Excel出力 | [共通の文書手順](documents/README.md) |
+| 案件ごとの課題台帳・工程判定 | [記録の作成方法と保存先](records/README.md) |
 
 ## 適用条件
 
