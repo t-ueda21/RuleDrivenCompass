@@ -5,7 +5,6 @@
 """Check and record RDC phase entry and completion decisions."""
 
 import argparse
-import hashlib
 import json
 import re
 import sqlite3
@@ -18,7 +17,8 @@ from pathlib import Path
 from markdown_it.tree import SyntaxTreeNode
 
 sys.dont_write_bytecode = True
-from check_document import cell_error, inspect_document, read_sections, table_rows
+from check_document import TEST_OUTCOMES, cell_error, digest, inspect_document, item_id, read_sections, section_rows
+import test_history as journal
 
 
 PHASE_ORDERS = {
@@ -70,6 +70,7 @@ class Gate:
     restart_required: bool = False
     note: str = ""
     updated: str = ""
+    legacy_tests: bool = False
 
 
 @dataclass(frozen=True)
@@ -77,14 +78,6 @@ class Decision:
     status: str
     details: list[str] = field(default_factory=list)
     note: str = ""
-
-
-def digest(path: Path) -> str:
-    sha256 = hashlib.sha256()
-    with path.open("rb") as file:
-        for chunk in iter(lambda: file.read(1024 * 1024), b""):
-            sha256.update(chunk)
-    return sha256.hexdigest()
 
 
 def fingerprint(root: Path, paths: list[Path]) -> dict[str, str]:
@@ -113,12 +106,15 @@ def changed_files(root: Path, *snapshots: dict[str, str]) -> list[str]:
 
 
 def load_gates(conn: sqlite3.Connection, work_id: str) -> dict[str, Gate]:
-    return {
-        phase: Gate(**json.loads(value))
-        for phase, value in conn.execute(
-            "SELECT phase, value FROM phase_gates WHERE work_id = ?", (work_id,)
-        )
-    }
+    gates = {}
+    for phase, value in conn.execute(
+        "SELECT phase, value FROM phase_gates WHERE work_id = ?", (work_id,)
+    ):
+        data = json.loads(value)
+        if "legacy_tests" not in data and phase in TEST_SOURCES:
+            data["legacy_tests"] = bool(data.get("documents")) or data.get("status") == "通過"
+        gates[phase] = Gate(**data)
+    return gates
 
 
 def save_gate(conn: sqlite3.Connection, work_id: str, phase: str, gate: Gate) -> None:
@@ -158,18 +154,6 @@ def invalidate_following(
             save_gate(conn, work_id, later, gate)
 
 
-def item_id(value: str) -> str:
-    return re.split(r"[\s:：]+", value.replace("`", "").strip(), maxsplit=1)[0]
-
-
-def section_rows(sections: dict[str, list[SyntaxTreeNode]], title: str) -> list[dict[str, str]]:
-    for node in sections.get(title, []):
-        if node.type == "table":
-            headers, *rows = table_rows(node)
-            return [dict(zip(headers, row)) for row in rows if any(row)]
-    return []
-
-
 def target_issues(
     phase: str, mode: str, targets: list[str], root: Path, inputs: dict[str, str]
 ) -> list[str]:
@@ -195,7 +179,7 @@ def target_issues(
 
 
 def test_issues(
-    phase: str, targets: list[str], documents: list[dict[str, list[SyntaxTreeNode]]]
+    phase: str, targets: list[str], documents: list[dict[str, list[SyntaxTreeNode]]], finals: dict
 ) -> list[str]:
     target_column = TEST_SOURCES[phase].case_column
     cases: dict[str, str] = {}
@@ -219,20 +203,43 @@ def test_issues(
             runs[run] = case
             if case not in cases:
                 issues.append(f"実行結果 {run} に対応する試験ケースがない。{case}")
-            elif row["判定"].strip("`").strip() not in {"合格", "不合格"}:
-                issues.append(f"実行結果 {run} に合格・不合格の判定がない")
-            else:
+            elif row["判定"].strip("`").strip() not in TEST_OUTCOMES:
+                issues.append(f"実行結果 {run} の当初判定を確認する")
+            elif case in finals and finals[case].name == run and finals[case].final in TEST_OUTCOMES[:2]:
                 completed.add(case)
 
     if phase == "system-testing":
-        title, column, links = "対象範囲の判定（必須）", "条件 ID・項目名", "対応するケース・実行 ID"
+        title, column, links = (
+            "対象範囲の判定（必須）",
+            "条件 ID・項目名",
+            "対応するケース・実行 ID",
+        )
+        verdict = "判定"
     else:
-        title, column, links = "試験範囲と完了判定（必須）", "判定根拠の項目 ID", "対応ケース・実行 ID"
+        title, column, links = (
+            "試験範囲と完了判定（必須）",
+            "判定根拠の項目 ID",
+            "対応ケース・実行 ID",
+        )
+        verdict = "対象範囲の判定"
+    failed_targets = {
+        target
+        for case, target in cases.items()
+        if case in finals and finals[case].final == "不合格"
+    }
     for sections in documents:
         for row in section_rows(sections, title):
             key = item_id(row[column])
+            if key in failed_targets and re.match(
+                r"^(?:全件)?合格(?:$|[\s（(:：。])", row[verdict].strip("` ")
+            ):
+                issues.append(f"{key} の最終不合格ケースと対象範囲の合格判定が一致しない")
             references = set(re.split(r"[`\s,、/／]+", row[links]))
-            matching_runs = (runs[run] for run in references & runs.keys())
+            matching_runs = (
+                runs[run]
+                for run in references & runs.keys()
+                if runs[run] in completed and finals[runs[run]].name == run
+            )
             if any(case in references and cases.get(case) == key for case in matching_runs):
                 judged.add(key)
 
@@ -276,6 +283,12 @@ def start_phase(
     if args.phase in TEST_SOURCES:
         if not targets:
             raise ValueError("試験の着手前に、対象となる仕様・契約・条件の ID を指定する")
+        plan = journal.plans_for(conn, args.work_id).get(args.phase)
+        if plan:
+            target_column = TEST_SOURCES[args.phase].case_column
+            planned = {item_id(case["fields"][target_column]) for case in plan["cases"].values()}
+            if not set(targets) <= planned:
+                raise ValueError("対象 ID が登録済みの初回計画と一致しない")
         source = gates.get(TEST_SOURCES[args.phase].phase)
         if not inputs and source is None:
             raise ValueError("対象 ID の根拠となる既存資料を --input-evidence で指定する")
@@ -285,7 +298,8 @@ def start_phase(
         if problems:
             return Decision("保留", problems)
 
-    save_gate(conn, args.work_id, args.phase, Gate(args.mode, scope, targets, inputs))
+    gate = Gate(args.mode, scope, targets, inputs, legacy_tests=bool(current and current.legacy_tests))
+    save_gate(conn, args.work_id, args.phase, gate)
     invalidate_following(conn, args.work_id, gates, scope, args.phase)
     return Decision("着手可", [f"対象 ID {', '.join(targets)}"] if targets else [])
 
@@ -322,8 +336,20 @@ def finish_phase(
                 sections.append(inspection.sections)
         except (OSError, ValueError) as error:
             issues.append(f"{name} — {error}")
-    if args.phase in TEST_SOURCES and sections:
-        issues.extend(test_issues(args.phase, gate.targets, sections))
+    counts = []
+    if args.phase in TEST_SOURCES:
+        plan = journal.plans_for(conn, args.work_id).get(args.phase)
+        attempts = journal.attempts_for(conn, args.work_id) if plan else {}
+        issues.extend(journal.completion_issues(root, args.phase, plan, attempts, sections))
+        finals = {case: runs[-1] for (phase, case), runs in attempts.items() if phase == args.phase}
+        issues.extend(test_issues(args.phase, gate.targets, sections, finals))
+        if plan:
+            counts = journal.count_lines(((args.phase, key) for key in plan["cases"]), attempts)
+            for (phase, _), runs in attempts.items():
+                if phase == args.phase:
+                    evidence.update(
+                        {run.result["log"]: run.result["hash"] for run in runs if run.result}
+                    )
 
     issues.extend(previous_issues(root, gates, gate.scope, args.phase))
     issues.extend(changed_files(root, gate.inputs, documents, evidence))
@@ -336,7 +362,7 @@ def finish_phase(
     gate.note = args.note
     gate.issues = issues
     save_gate(conn, args.work_id, args.phase, gate)
-    return Decision(status, issues, gate.note)
+    return Decision(status, issues + counts, gate.note)
 
 
 def print_report(title: str, issues: list[str], note: str = "") -> None:
@@ -347,26 +373,84 @@ def print_report(title: str, issues: list[str], note: str = "") -> None:
         print(f"  {note}")
 
 
-def show_status(root: Path, gates: dict[str, Gate]) -> int:
+def show_status(root: Path, gates: dict[str, Gate], plans: dict, attempts: dict) -> int:
     if not gates:
         print("判定記録がない")
         return 0
     scope = next(iter(gates.values())).scope
     for phase in scope:
         gate = gates.get(phase)
+        counts = (
+            journal.count_lines(((phase, key) for key in plans[phase]["cases"]), attempts)
+            if phase in plans
+            else []
+        )
         if not gate:
-            print(f"{phase} 未着手")
+            print_report(f"{phase} 未着手", counts)
             continue
         issues = previous_issues(root, gates, scope, phase)
         issues.extend(changed_files(root, gate.inputs, gate.documents, gate.evidence))
         status = "保留（再確認）" if issues else gate.status
-        print_report(f"{phase} {status}  {gate.updated}", gate.issues + issues, gate.note)
+        if phase in TEST_SOURCES and phase not in plans:
+            counts = ["初回記録なし"]
+        print_report(f"{phase} {status}  {gate.updated}", gate.issues + issues + counts, gate.note)
         if gate.targets:
             print(f"  対象 ID {', '.join(gate.targets)}")
-        for label, files in (("入力", gate.inputs), ("文書", gate.documents), ("証跡", gate.evidence)):
+        for label, files in (
+            ("入力", gate.inputs),
+            ("文書", gate.documents),
+            ("証跡", gate.evidence),
+        ):
             for path in files:
                 print(f"  {label} {path}")
     return 0
+
+
+def journal_action(args, root, conn, gates):
+    journal.ensure_schema(conn)
+    if args.command == "test-plan":
+        return journal.register(conn, root, args, gates, TEST_SOURCES)
+    plans = journal.plans_for(conn, args.work_id)
+    attempts = journal.attempts_for(conn, args.work_id)
+    starting = args.command in {"test-begin", "test-run"}
+    if starting:
+        phase = args.phase
+    else:
+        run = journal.lookup(attempts, args.run_id)
+        if args.command == "test-result":
+            if args.interrupted and args.outcome != "判定不能":
+                raise ValueError("中断した試行は判定不能として事実と根拠を記録する")
+            if run.start.get("command") and not (args.interrupted and args.outcome == "判定不能"):
+                raise ValueError(
+                    "自動試行は test-run が記録する。強制終了時は --interrupted と判定不能で中断理由を記録する"
+                )
+            return journal.record(
+                conn,
+                root,
+                run,
+                args.outcome,
+                args.actual,
+                args.evidence,
+                plans[run.phase],
+                TEST_SOURCES,
+                requires_rerun=args.interrupted,
+            )
+        phase = run.phase
+    # A downstream dependency can prevent the very first operation from being executed.
+    gate = gates.get(phase)
+    if gate and gate.status == "通過":
+        raise ValueError(f"{phase} の再着手を start で確認する")
+    if not (starting and args.blocked):
+        if not gate or gate.restart_required:
+            raise ValueError(f"{phase} の着手を start で確認する")
+        problems = previous_issues(root, gates, gate.scope, phase) + changed_files(
+            root, gate.inputs
+        )
+        if problems:
+            raise ValueError("、".join(problems))
+    if starting:
+        return journal.begin(conn, root, args, plans, attempts, TEST_SOURCES)
+    return journal.rejudge(conn, root, args, run, plans, attempts, TEST_SOURCES)
 
 
 def main() -> int:
@@ -387,6 +471,7 @@ def main() -> int:
     finish.add_argument("--evidence", action="append", type=Path, default=[])
     finish.add_argument("--review", required=True, choices=("confirmed", "pending"))
     finish.add_argument("--note", default="")
+    journal.arguments(commands, tuple(TEST_SOURCES))
     args = parser.parse_args()
 
     root = Path.cwd()
@@ -394,14 +479,21 @@ def main() -> int:
     try:
         if not args.work_id.strip():
             raise ValueError("空欄以外の作業 ID を指定する")
-        if args.command == "status":
+        if args.command in {"status", "test-report"}:
             if not database.is_file():
-                return show_status(root, {})
+                print("初回記録なし" if args.command == "test-report" else "判定記録がない")
+                return 0
             with closing(sqlite3.connect(f"{database.as_uri()}?mode=ro", uri=True)) as conn:
-                return show_status(root, load_gates(conn, args.work_id))
+                conn.execute("BEGIN")
+                plans = journal.plans_for(conn, args.work_id)
+                attempts = journal.attempts_for(conn, args.work_id) if plans else {}
+                if args.command == "test-report":
+                    print(journal.report(plans, attempts, args.phase))
+                    return 0
+                return show_status(root, load_gates(conn, args.work_id), plans, attempts)
 
-        if args.command == "finish" and not database.is_file():
-            raise ValueError(f"{args.phase} の着手を start で確認する")
+        if args.command != "start" and not database.is_file():
+            raise ValueError("工程の着手を start で確認する")
         database.parent.mkdir(parents=True, exist_ok=True)
         with closing(sqlite3.connect(database, timeout=15)) as conn:
             conn.execute(
@@ -412,8 +504,22 @@ def main() -> int:
             with conn:
                 conn.execute("BEGIN IMMEDIATE")
                 gates = load_gates(conn, args.work_id)
-                action = start_phase if args.command == "start" else finish_phase
-                decision = action(args, root, conn, gates)
+                if args.command in journal.COMMANDS:
+                    reply = journal_action(args, root, conn, gates)
+                else:
+                    action = start_phase if args.command == "start" else finish_phase
+                    decision = action(args, root, conn, gates)
+            if args.command in journal.COMMANDS:
+                if isinstance(reply, journal.Attempt):
+                    kind = "初回" if reply.start["ordinal"] == 1 else "再試験"
+                    print(f"{reply.name} {reply.phase}/{reply.case} {kind}", flush=True)
+                    if args.command == "test-run":
+                        return journal.execute_command(
+                            conn, root, args.work_id, reply, TEST_SOURCES
+                        )
+                else:
+                    print(reply)
+                return 0
         print_report(f"{args.phase} {decision.status}", decision.details, decision.note)
         return int(decision.status == "保留")
     except (OSError, ValueError, sqlite3.Error) as error:

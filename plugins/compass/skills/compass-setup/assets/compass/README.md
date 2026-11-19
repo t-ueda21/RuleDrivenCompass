@@ -6,6 +6,7 @@
 | --- | --- |
 | 着手前 | [作業前 Skill](workflow/preflight/SKILL.md) |
 | 作業・検証 | [ワークフロー](workflow/README.md)、[工程 Skill と成果物テンプレート](workflow/phase/README.md)、[技術ガイド](guide/README.md) |
+| 試験前の計画・各回の実行・初回と最終の報告 | [試験の初回記録](documents/test-history.md) |
 | 全工程で人間に確認するとき、回答を受けたとき、決定を反映したとき | [課題管理 Skill](workflow/issue-tracking/SKILL.md) |
 | 結果報告 | [作業後 Skill](workflow/postflight/SKILL.md) |
 | 工程判定・文書の記録・確認・Excel出力 | [共通の文書手順](documents/README.md) |

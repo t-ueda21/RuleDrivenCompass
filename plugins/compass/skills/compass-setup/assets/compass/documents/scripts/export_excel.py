@@ -33,6 +33,7 @@ SECTION_LABEL = re.compile(r"\s*（(?:必須|本番必須|試作必須|補足|�
 LINE_BREAK = re.compile(r"<br\s*/?>", re.IGNORECASE)
 TITLE_SHEET = "タイトル"
 REVISION_SHEET = "変更履歴"
+TEMPLATE_PREFIX = "テンプレート_"
 BODY_TEXT = "192532"
 TABLE_LINE = Side(style="thin", color="ADBACA")
 HEADER_LINE = Side(style="thin", color="DDE7F0")
@@ -168,8 +169,56 @@ def unique_sheet_name(workbook: Workbook, title: str) -> str:
     return unique_name(base, {name.casefold() for name in workbook.sheetnames}, 31)
 
 
-def output_filename(title: str, taken: set[str]) -> str:
+def enclosing_project(directory: Path) -> Path | None:
+    return next(
+        (path for path in (directory, *directory.parents) if (path / ".compass/README.md").is_file()),
+        None,
+    )
+
+
+def books_output(requested: Path | None, documents: list[Path]) -> tuple[Path, str | None]:
+    cwd = Path.cwd().resolve()
+    root = enclosing_project(cwd)
+    if root is None:
+        owners = {owner for doc in documents if (owner := enclosing_project(doc.parent)) is not None}
+        if len(owners) > 1:
+            raise ValueError("複数の案件を含む入力。books/ の保存先となるプロジェクト内で実行する。")
+        framework = DOCUMENTS_DIR.parent
+        standalone = framework.parent if not documents and framework.name == ".compass" else cwd
+        root = next(iter(owners), standalone)
+    books = root / "books"
+    if books.resolve() != books or (books.exists() and not books.is_dir()):
+        raise ValueError(f"プロジェクト直下の books/ の配置を確認する。{books}")
+    if requested is None:
+        return books, None
+
+    requested = requested.expanduser()
+    single = requested.suffix.casefold() == ".xlsx"
+    base = books if single and requested.parent == Path(".") else root
+    path = base / requested
+    if path == books:
+        return books, None
+    if not single or path.parent != books:
+        raise ValueError("Excelの保存先はプロジェクト直下の books/。-o を省略するか、books/ファイル名.xlsx を指定する。")
+    device = WINDOWS_DEVICE_NAME.fullmatch(path.name.split(".", 1)[0].rstrip())
+    if INVALID_FILE_CHARACTERS.search(path.name) or device:
+        raise ValueError(f"books/ に保存できるファイル名を指定する。{path.name}")
+    return books, path.name
+
+
+def output_filename(
+    title: str, taken: set[str], *, template: bool = False, name: str | None = None,
+) -> str:
+    if name is not None:
+        if name.startswith(TEMPLATE_PREFIX) and not template:
+            raise ValueError(f"「{TEMPLATE_PREFIX}」で始まるファイル名はRDCテンプレート専用。{name}")
+        return TEMPLATE_PREFIX + name if template and not name.startswith(TEMPLATE_PREFIX) else name
+
     base = INVALID_FILE_CHARACTERS.sub(" ", title).strip(" .'") or "文書"
+    if template:
+        base = TEMPLATE_PREFIX + base
+    elif base.startswith(TEMPLATE_PREFIX):
+        base = "文書_" + base
     if WINDOWS_DEVICE_NAME.fullmatch(base.split(".", 1)[0].rstrip()):
         base = f"文書 {base}"
     stem = unique_name(base, taken, 100)
@@ -403,25 +452,26 @@ def save_workbook(workbook: Workbook, output: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="RDCのMarkdown文書を１文書１ブックでExcelに出力する。")
+    parser = argparse.ArgumentParser(description="RDCのMarkdown文書をプロジェクト直下の books/ に１文書１ブックで出力する。")
     parser.add_argument("documents", nargs="*", type=Path, metavar="MARKDOWN")
     parser.add_argument("--templates", action="store_true", help="工程と課題管理のテンプレートを出力する")
     parser.add_argument(
-        "-o", "--output", required=True, type=Path, metavar="OUTPUT",
-        help="出力フォルダ、または単一文書の出力先 .xlsx",
+        "-o", "--output", type=Path, metavar="OUTPUT",
+        help="既定は books/。単一文書はファイル名または books/ファイル名.xlsx を指定できる。",
     )
     args = parser.parse_intermixed_args()
     if not args.templates and not args.documents:
         parser.error("Markdownファイルまたは --templates を指定する。")
-    output = args.output.expanduser()
-    single_file = output.suffix.casefold() == ".xlsx"
-
     try:
-        sources = template_sources() if args.templates else []
-        sources += args.documents
-        input_paths = dict.fromkeys(path.expanduser().resolve() for path in sources)
-        if single_file and len(input_paths) != 1:
-            parser.error("複数の文書を出力する場合は出力フォルダを指定する。")
+        documents = [path.expanduser().resolve() for path in args.documents]
+        books, filename = books_output(args.output, documents)
+        templates = []
+        if args.templates or any(path.name == "template.md" for path in documents):
+            templates = [path.resolve() for path in template_sources()]
+        sources = [*templates, *documents] if args.templates else documents
+        input_paths = dict.fromkeys(sources)
+        if filename is not None and len(input_paths) != 1:
+            parser.error("複数の文書は books/ に文書名で出力する。-o を省略する。")
         layouts = workbook_layouts()
         names: set[str] = set()
         exports = []
@@ -432,7 +482,14 @@ def main() -> None:
                 title, workbook = build_workbook(source, layouts)
             except (OSError, ValueError, IllegalCharacterError) as error:
                 parser.error(f"{source} — {error}")
-            destination = output if single_file else output / output_filename(title, names)
+            template = (
+                source in templates
+                or source.match(".compass/workflow/phase/*/references/template.md")
+                or source.match(".compass/workflow/issue-tracking/references/template.md")
+            )
+            destination = books / output_filename(title, names, template=template, name=filename)
+            if destination.resolve() != destination or destination.is_dir():
+                raise ValueError(f"books/ 直下の通常ファイルを指定する。{destination}")
             exports.append((destination, workbook))
         for destination, workbook in exports:
             save_workbook(workbook, destination)

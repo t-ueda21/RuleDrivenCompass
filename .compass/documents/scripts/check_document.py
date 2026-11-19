@@ -5,6 +5,7 @@
 """Check the recorded fields of a completed RDC Markdown phase document."""
 
 import argparse
+import hashlib
 import re
 import sys
 from dataclasses import dataclass
@@ -20,8 +21,9 @@ MODE_LABELS = {"本番必須": "production", "試作必須": "poc"}
 SECTION_LABEL = re.compile(r"（(必須|本番必須|試作必須|補足)）$")
 STATUS_LABELS = (
     "該当なし", "対象外", "未確認", "未確定", "未実施", "判定不能", "要確認", "確認待ち",
-    "保留", "未検証", "未判定",
+    "保留", "未検証", "未判定", "実施不能",
 )
+TEST_OUTCOMES = ("合格", "不合格", "判定不能", "実施不能")
 STATUS = re.compile(r"(" + "|".join(STATUS_LABELS) + r")[（(](.*)[）)]", re.DOTALL)
 REQUIREMENT_SECTION = "要件との対応（必須）"
 CONTRACT_SECTION = "要素間の契約（補足）"
@@ -67,6 +69,26 @@ def table_rows(table: SyntaxTreeNode) -> list[list[str]]:
         for group in table.children
         for row in group.children
     ]
+
+
+def section_rows(sections: dict[str, list[SyntaxTreeNode]], title: str) -> list[dict[str, str]]:
+    for node in sections.get(title, []):
+        if node.type == "table":
+            headers, *rows = table_rows(node)
+            return [dict(zip(headers, row)) for row in rows if any(row)]
+    return []
+
+
+def item_id(value: str) -> str:
+    return re.split(r"[\s:：]+", value.replace("`", "").strip(), maxsplit=1)[0]
+
+
+def digest(path: Path) -> str:
+    sha256 = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()
 
 
 def recorded_status(value: str) -> str | None:
@@ -138,6 +160,11 @@ def check_table(
             if fixed_labels and index > 0:
                 conditional = conditional or label.endswith("（該当時）")
             if required_only and conditional:
+                continue
+            verdict_column = (headers[0] == "実行 ID" and header == "判定") or (
+                "初回判定" in headers and header in {"初回判定", "最終判定"}
+            )
+            if verdict_column and value in TEST_OUTCOMES:
                 continue
             if header == "状況" and value in STATUS_LABELS and reason_column is not None:
                 value = f"{value}（{row[reason_column]}）"

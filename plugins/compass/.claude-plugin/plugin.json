@@ -1,6 +1,6 @@
 {
   "name": "compass",
-  "version": "0.2.1",
+  "version": "0.3.1",
   "description": "プロジェクトにRDCの工程Skill、技術ガイド、テンプレート、検証・Excel出力を導入する。",
   "author": {
     "name": "t-ueda21"

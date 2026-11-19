@@ -23,4 +23,4 @@ description: Use for human confirmations and decisions in any RDC phase (課題�
 
 ## Excel出力
 
-Excelで共有・確認するときは、[共通のExcel出力手順](../../documents/excel-export.md)に従い、記入済みの `.compass/records/issue-log.md` を入力に指定する。
+Excelで共有・確認するときは、[共通のExcel出力手順](../../documents/excel-export.md)に従い、記入済みの `.compass/records/issue-log.md` を `books/課題管理表.xlsx` に出力する。
