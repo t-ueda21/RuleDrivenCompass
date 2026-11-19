@@ -1,5 +1,6 @@
 import codecs
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -51,6 +52,34 @@ class PluginSetupTests(unittest.TestCase):
         self.assertFalse((self.project / "CLAUDE.md").exists())
         self.assertFalse((self.project / ".claude").exists())
         self.assertIn("今回の変更 0 件", self.run_setup().stdout)
+
+    def test_principles_and_conditional_rules_are_reachable_after_install(self):
+        self.run_setup()
+        compass = self.project / ".compass"
+        setup_skill = SETUP.parents[1] / "SKILL.md"
+        bundled = setup_skill.parent / "assets/compass"
+        routes = {
+            setup_skill: [bundled / "principles/README.md"],
+            self.project / "AGENTS.md": [compass / "README.md"],
+            compass / "README.md": [
+                compass / "principles/README.md",
+                compass / "workflow/README.md",
+                compass / "workflow/clarify-purpose/SKILL.md",
+                compass / "documents/article-standards.md",
+            ],
+            compass / "principles/README.md": [compass / "principles/do-not-lie.md"],
+            compass / "workflow/README.md": [compass / "workflow/clarify-purpose/SKILL.md"],
+            compass / "workflow/preflight/SKILL.md": [compass / "workflow/clarify-purpose/SKILL.md"],
+            compass / "workflow/clarify-purpose/SKILL.md": [compass / "workflow/issue-tracking/SKILL.md"],
+            compass / "documents/README.md": [compass / "documents/article-standards.md"],
+        }
+        for source, targets in routes.items():
+            links = re.findall(r"\[[^\]]*\]\(([^)]+)\)", source.read_text(encoding="utf-8-sig"))
+            local_paths = {(source.parent / link).resolve() for link in links if "://" not in link}
+            for target in targets:
+                with self.subTest(source=source.name, target=target):
+                    self.assertIn(target, local_paths)
+                    self.assertTrue(target.is_file())
 
     def test_update_preserves_records_and_existing_project_instructions(self):
         records = self.project / ".compass/records"

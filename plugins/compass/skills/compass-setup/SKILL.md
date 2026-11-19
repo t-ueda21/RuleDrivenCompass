@@ -5,6 +5,8 @@ description: Use when the user asks to install, initialize, or update Rule Drive
 
 # RDCのセットアップ
 
+最初に、プラグイン同梱の [Compass の対話と判断](assets/compass/principles/README.md) と、そこで指定する13項目を読む。導入先にまだ `.compass/` がない初回も、更新時も、セットアップの判断と報告に適用する。
+
 1. 指定された導入先のプロジェクトルートを確認する。導入先で、このSkillに同梱した [セットアップスクリプト](scripts/setup.py) を実行する。スクリプトのパスは、現在読み込んでいるこの `SKILL.md` のフォルダを基準に解決し、空白を含むパスは引用符で囲む。
 
    ```text

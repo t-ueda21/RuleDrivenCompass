@@ -1,12 +1,14 @@
 # Compass の参照先
 
-依頼の着手から完了報告までの手順は [ワークフロー](workflow/README.md) に従う。ここで各段階の参照先と適用条件を確認する。参照パスは `.compass/` が基準。
+依頼ごとに、最初に [Compass の対話と判断](principles/README.md) を読み、そこに示す原則を各回答と成果物に適用する。着手から完了報告までは [ワークフロー](workflow/README.md) に従う。参照パスは `.compass/` が基準。
 
 | タイミング | 参照先 |
 | --- | --- |
 | 着手前 | [作業前 Skill](workflow/preflight/SKILL.md) |
+| 分類・判定基準の設計、既存案の要否の相談、目的の解釈で結論が変わる判断 | [目的確認 Skill](workflow/clarify-purpose/SKILL.md) |
 | 作業・検証 | [ワークフロー](workflow/README.md)、[工程 Skill と成果物テンプレート](workflow/phase/README.md)、[技術ガイド](guide/README.md) |
 | 試験前の計画・各回の実行・初回と最終の報告 | [試験の初回記録](documents/test-history.md) |
+| 記事の構成設計・執筆・レビュー | [記事作成・レビューの基準](documents/article-standards.md) |
 | 全工程で人間に確認するとき、回答を受けたとき、決定を反映したとき | [課題管理 Skill](workflow/issue-tracking/SKILL.md) |
 | 結果報告 | [作業後 Skill](workflow/postflight/SKILL.md) |
 | 工程判定・文書の記録・確認・Excel出力 | [共通の文書手順](documents/README.md) |
