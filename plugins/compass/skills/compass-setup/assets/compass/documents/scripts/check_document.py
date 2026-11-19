@@ -28,6 +28,7 @@ STATUS = re.compile(r"(" + "|".join(STATUS_LABELS) + r")[（(](.*)[）)]", re.DO
 REQUIREMENT_SECTION = "要件との対応（必須）"
 CONTRACT_SECTION = "要素間の契約（補足）"
 CONTRACT_COLUMN = "契約 ID・項目名（該当時）"
+SCREEN_REVIEW = "画面試作とフィードバック（補足）"
 PLACEHOLDERS = {
     "", "-", "—", "―", "…", "...", "tbd", "n/a", "todo",
     "記入", "［記入］", "仮記入", "未記入", "未定", "理由", "理由を記載",
@@ -166,6 +167,9 @@ def check_table(
             )
             if verdict_column and value in TEST_OUTCOMES:
                 continue
+            # The review-specific check reports pending decisions with the affected screen.
+            if header == "判断" and "試作の版・参照先" in headers and value in {"確認待ち", "再確認待ち", "保留"}:
+                continue
             if header == "状況" and value in STATUS_LABELS and reason_column is not None:
                 value = f"{value}（{row[reason_column]}）"
             error = cell_error(value, required and not conditional)
@@ -259,6 +263,50 @@ def document_templates() -> dict[str, Path]:
     }
 
 
+def check_screen_review(
+    expected: list[list[str]], sections: dict[str, list[SyntaxTreeNode]], mode: str | None
+) -> list[str]:
+    sources = section_rows(sections, "要求の情報源（必須）")
+    declared = any(item_id(row.get("要求元・資料", "")) == "画面試作" for row in sources)
+    if SCREEN_REVIEW not in sections:
+        # Existing requirements documents without a screen prototype keep their original format.
+        return ["要求の情報源にある画面試作のレビュー記録がない"] if declared else []
+
+    nodes = sections[SCREEN_REVIEW]
+    reviews = section_rows(sections, SCREEN_REVIEW)
+    excluded = any(
+        recorded_status(node_text(node)) in {"該当なし", "対象外"}
+        for node in nodes if node.type in {"paragraph", "blockquote"}
+    )
+    if excluded and not reviews:
+        return ["要求の情報源の画面試作を対象外にできない"] if declared else []
+
+    errors = [
+        f"{row.get('画面・操作', '')} — 利用者確認と採否が未確定（{row['判断']}）"
+        for row in reviews if "判断" in row and row["判断"] not in {"採用", "変更なし", "見送り"}
+    ]
+    structure_errors = check_section(expected, nodes, "必須", mode, required_only=True)
+    if structure_errors:
+        return errors + structure_errors
+    if not declared:
+        errors.append("提示した版を「要求の情報源」に「画面試作」として記録する")
+    requirements = {item_id(row.get("要件 ID・項目名", "")) for row in section_rows(sections, "要件一覧（必須）")}
+    condition_section, target = "受け入れ条件（本番必須）", "要件 ID・項目名"
+    if mode == "poc":
+        condition_section, target = "仮説と成功条件（試作必須）", "要件・確認対象"
+    condition_pairs = {
+        (item_id(row.get(target, "")), item_id(row.get("条件 ID・項目名", "")))
+        for row in section_rows(sections, condition_section)
+    }
+    for row in reviews:
+        if row["判断"] == "採用":
+            requirement = item_id(row["要件 ID・項目名（該当時）"])
+            condition = item_id(row["条件 ID・項目名（該当時）"])
+            if requirement not in requirements or (requirement, condition) not in condition_pairs:
+                errors.append(f"{row['画面・操作']} — 採用した要件 {requirement} と判定条件 {condition} の対応を確認する")
+    return errors
+
+
 def inspect_document(phase: str, document: Path, mode: str | None) -> DocumentInspection:
     expected = read_sections(PHASE_DIR / phase / "references" / "template.md")
     actual = read_sections(document)
@@ -271,6 +319,11 @@ def inspect_document(phase: str, document: Path, mode: str | None) -> DocumentIn
         tables = [node for node in nodes if node.type == "table"]
         if label is None or len(tables) != 1:
             raise ValueError(f"テンプレートの記録区分または表を確認する。{title}")
+        if phase == "requirements-definition" and title == SCREEN_REVIEW:
+            errors = check_screen_review(table_rows(tables[0]), actual, mode)
+            messages.extend(f"{title} — {error}" for error in errors)
+            blocking.extend(f"{title} — {error}" for error in errors)
+            continue
         category = label[1]
         expected_mode = MODE_LABELS.get(category)
         if expected_mode and mode is None:

@@ -66,6 +66,27 @@ class ExcelBooksTests(unittest.TestCase):
         self.assertTrue((self.books / "結合試験書.xlsx").is_file())
         self.assertFalse((self.docs / "books").exists())
 
+    def test_screen_feedback_stays_in_the_requirements_workbook(self):
+        document = self.docs / "requirements.md"
+        feedback = (
+            "## 画面試作とフィードバック（補足）\n\n"
+            "| 画面 | 課題 ID | 要件 | 判定条件 |\n|---|---|---|---|\n"
+            "| 予約 v2 | Q-017 | REQ-12 | AC-04 |\n"
+        )
+        for title in ("要件定義書", "備品受取予約　要件定義書"):
+            with self.subTest(title=title):
+                document.write_text(f"# {title}\n\n{feedback}", encoding="utf-8")
+                self.export(document)
+                book = self.books / f"{title}.xlsx"
+                sheets, _ = workbook_contents(book)
+                self.assertEqual(sheets[:2], ["タイトル", "変更履歴"])
+                self.assertIn("画面レビュー", sheets)
+                with ZipFile(book) as workbook:
+                    page = workbook.read(f"xl/worksheets/sheet{sheets.index('画面レビュー') + 1}.xml")
+                    text = "".join(ElementTree.fromstring(page).itertext())
+                for value in ("予約 v2", "Q-017", "REQ-12", "AC-04"):
+                    self.assertIn(value, text)
+
     def test_installed_exporter_from_outside_uses_its_own_project_books(self):
         self.export(self.report, cwd=self.root.parent)
         self.assertTrue((self.books / "結合試験書.xlsx").is_file())

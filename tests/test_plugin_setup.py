@@ -73,6 +73,13 @@ class PluginSetupTests(unittest.TestCase):
             compass / "workflow/clarify-purpose/SKILL.md": [compass / "workflow/issue-tracking/SKILL.md"],
             compass / "documents/README.md": [compass / "documents/article-standards.md"],
         }
+        requirements = compass / "workflow/phase/requirements-definition"
+        prototype = requirements / "screen-prototype/SKILL.md"
+        routes[requirements / "SKILL.md"] = [prototype]
+        routes[prototype] = [
+            compass / "workflow/issue-tracking/SKILL.md",
+            requirements / "screen-prototype/references/review-example.md",
+        ]
         for source, targets in routes.items():
             links = re.findall(r"\[[^\]]*\]\(([^)]+)\)", source.read_text(encoding="utf-8-sig"))
             local_paths = {(source.parent / link).resolve() for link in links if "://" not in link}

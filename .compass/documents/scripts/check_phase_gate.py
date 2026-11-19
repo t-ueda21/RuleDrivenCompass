@@ -17,7 +17,7 @@ from pathlib import Path
 from markdown_it.tree import SyntaxTreeNode
 
 sys.dont_write_bytecode = True
-from check_document import TEST_OUTCOMES, cell_error, digest, inspect_document, item_id, read_sections, section_rows
+from check_document import SCREEN_REVIEW, TEST_OUTCOMES, cell_error, digest, inspect_document, item_id, read_sections, section_rows
 import test_history as journal
 
 
@@ -304,6 +304,33 @@ def start_phase(
     return Decision("着手可", [f"対象 ID {', '.join(targets)}"] if targets else [])
 
 
+def screen_feedback_issues(root: Path, sections: list[dict[str, list[SyntaxTreeNode]]]) -> list[str]:
+    tickets = {
+        item_id(row["課題 ID"]) for document in sections for row in section_rows(document, SCREEN_REVIEW)
+    }
+    if not tickets:
+        return []
+    log = root / ".compass/records/issue-log.md"
+    try:
+        records = section_rows(read_sections(log), "課題一覧")
+    except (OSError, ValueError) as error:
+        return [f"画面試作の課題管理表を確認できない。{log} — {error}"]
+
+    errors = []
+    for ticket in sorted(tickets):
+        entries = [row for row in records if item_id(row.get("課題 ID", "")) == ticket]
+        if len(entries) != 1:
+            errors.append(f"画面試作に対応する課題 {ticket} を課題管理表で一意に特定できない")
+            continue
+        entry = entries[0]
+        if entry.get("状態") not in {"対応待ち", "完了"} or any(
+            cell_error(entry.get(field, ""), required=True)
+            for field in ("確認先", "回答・決定日", "回答・決定内容", "判断根拠・参照先")
+        ):
+            errors.append(f"画面試作の課題 {ticket} に利用者の回答・決定と根拠を記録する")
+    return errors
+
+
 def finish_phase(
     args: argparse.Namespace, root: Path, conn: sqlite3.Connection, gates: dict[str, Gate]
 ) -> Decision:
@@ -336,6 +363,8 @@ def finish_phase(
                 sections.append(inspection.sections)
         except (OSError, ValueError) as error:
             issues.append(f"{name} — {error}")
+    if args.phase == "requirements-definition":
+        issues.extend(screen_feedback_issues(root, sections))
     counts = []
     if args.phase in TEST_SOURCES:
         plan = journal.plans_for(conn, args.work_id).get(args.phase)

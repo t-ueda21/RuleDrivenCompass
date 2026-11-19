@@ -395,6 +395,11 @@ def build_workbook(source: Path, layouts: dict[str, dict[str, list[str]]]) -> tu
     title = source.stem
     if isinstance(blocks[0], TextBlock) and blocks[0].kind == "h1":
         title = blocks.pop(0).text or title
+    layout_title = title
+    if title not in layouts:
+        parts = title.rsplit(maxsplit=1)
+        if len(parts) == 2 and parts[1] in layouts:
+            layout_title = parts[1]
 
     intro: list[TextBlock | TableBlock] = []
     sections: list[tuple[str, list[TextBlock | TableBlock]]] = []
@@ -414,7 +419,7 @@ def build_workbook(source: Path, layouts: dict[str, dict[str, list[str]]]) -> tu
         if all(isinstance(block, TextBlock) and block.kind == "note" for block in intro):
             cover.extend(intro)
         else:
-            body.append(("課題一覧" if title == "課題管理表" else "本文", intro))
+            body.append(("課題一覧" if layout_title == "課題管理表" else "本文", intro))
 
     for heading, content in sections:
         name = SECTION_LABEL.sub("", heading).strip()
@@ -436,7 +441,7 @@ def build_workbook(source: Path, layouts: dict[str, dict[str, list[str]]]) -> tu
     workbook.remove(workbook.active)
     add_sheet(workbook, TITLE_SHEET, title, cover)
     add_sheet(workbook, REVISION_SHEET, revision_title, revisions)
-    add_content_sheets(workbook, body, layouts.get(title, {}))
+    add_content_sheets(workbook, body, layouts.get(layout_title, {}))
     return title, workbook
 
 
